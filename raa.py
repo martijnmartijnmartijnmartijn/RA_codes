@@ -1,19 +1,24 @@
-from sys import float_repr_style
-import matplotlib.pyplot as plt
 import numpy as np
 from filecache import filecache
-from math import sqrt
 from random import Random
-from matplotlib.colors import LogNorm
 from sympy import Matrix
-from sympy.core.logic import fuzzy_or
-import LinearBlockCode
 from re import findall
+
+import matplotlib.pyplot as plt
+from matplotlib.colors import LogNorm
+plt.rcParams.update({"text.usetex": True, "font.family": "serif", "font.size": 15})
 
 get_A = lambda n : np.array([[1 if j <= i else 0 for j in range(n)] for i in range(n)])
 get_A_inv = lambda n : np.array([[1 if j == i or j == i + 1 else 0 for j in range(n)] for i in range(n)]).T
 to_bitstring = lambda s, n : np.array([int(val) for val in np.binary_repr(s, width=n)])
 
+def create_linear_label(slope, intercept):
+    label = "$"
+    round = float("{:.2g}".format(slope))
+    label += "{}x + ".format(round) if round != 0 else ""
+    round = float("{:.2g}".format(intercept))
+    label += "{}$".format(round) if round != 0 else " $"
+    return label
 
 def get_wt_of_code(G):
     """
@@ -46,9 +51,9 @@ def get_wt_of_code(G):
 @filecache(60 * 60 * 24 * 365)
 def get_wt_of_codes(mode, k, r, n_samples, seed):
     """
-    Helper function of plot_weights: actually samples the codes in the given
-    mode of the given block length. Returns the mean weight distribution and
-    minimum weights.
+    Helper function of plot_weights: samples the given number of codes of the
+    given type and the given block length. Outputs the mean weight distribution
+    across all sampled codes, and the minimum distance of each sampled code.
 
     Input:
     - mode : a string of A's and D's. The codes that are sampled have the form
@@ -85,15 +90,14 @@ def get_wt_of_codes(mode, k, r, n_samples, seed):
             temp = A if 'A' in M else D
             M = temp.T if "^T" in M else temp
             G = M @ np.eye(n)[prng.sample(range(n),n)] @ G % 2
-        # G_dual = get_dual(G) # Alternative way to compute dual...
-        # print("G_2^T G == [0]?\n{}".format(G_dual.T @ G % 2))
+
         # Compute min wt and wt distribution of sampled code.
         wt_dist, min_wt = get_wt_of_code(G)
         mean_wt_dist += wt_dist
         min_weights[i] = min_wt
     return mean_wt_dist, min_weights
 
-def plot_weights(mode, k_min, k_max, r=2, n_samples=100, bins=10, seed=Random.randint(Random(), 0, 2**15)):
+def plot_weights(mode, k_min, k_max, r, n_samples, bins, seed):
     """
     Samples RA-like codes and plots their relative weight distribution over the
     block length, and the minimum distance over the block length.
@@ -161,92 +165,13 @@ def plot_weights(mode, k_min, k_max, r=2, n_samples=100, bins=10, seed=Random.ra
     plt.title("Mean min. distance and mean relative weight distribution of codewords\nover block length for {} uniformly random $R{}$ codes with repetition factor {}.".format(n_samples, mode, r), pad=20)
     plt.legend(bbox_to_anchor=(1.175,1), loc="upper left")
     plt.savefig("plots/R{}_r={}_n={}_samples={}.pdf".format(mode, r, k_max * r, n_samples))
-    # plt.show()
 
-
-# Global params.
-plt.rcParams.update({"text.usetex": True, "font.family": "serif", "font.size": 15})
-r = 2
-bins = 20
-seed = 12345
-
-# Cached.
-n_samples = 100
-k_min = 2
-k_max = 13
-
-# 12 minutes to go from 18 to 20.
-# i.e. 4 minutes for n=38 and 8 minutes for n=40.
-#
-plot_weights("A", k_min, k_max, r, n_samples, bins, seed)
-plot_weights("D^T", k_min, k_max, r, n_samples, bins, seed)
-
-plot_weights("A^T", k_min, k_max, r, n_samples, bins, seed)
-plot_weights("D", k_min, k_max, r, n_samples, bins, seed)
-
-# 2 rounds.
-plot_weights("AA", k_min, k_max, r, n_samples, bins, seed)
-plot_weights("D^TD^T", k_min, k_max, r, n_samples, bins, seed)
-
-plot_weights("DA", k_min, k_max, r, n_samples, bins, seed)
-plot_weights("A^TD^T", k_min, k_max, r, n_samples, bins, seed)
-
-plot_weights("AD", k_min, k_max, r, n_samples, bins, seed)
-plot_weights("D^TA^T", k_min, k_max, r, n_samples, bins, seed)
-
-plot_weights("DD", k_min, k_max, r, n_samples, bins, seed)
-plot_weights("A^TA^T", k_min, k_max, r, n_samples, bins, seed)
-
-# 3 rounds.
-plot_weights("ADA", k_min, k_max, r, n_samples, bins, seed)
-plot_weights("DAD", k_min, k_max, r, n_samples, bins, seed)
-
-# 4 rounds
-plot_weights("ADAD", k_min, k_max, r, n_samples, bins, seed)
-plot_weights("DADA", k_min, k_max, r, n_samples, bins, seed)
-
-# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-# Not used anymore
-# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-def get_weight_k_vector(k, n):
-    """
-    Returns a uniformly random length n bitstring with weight k.
-    """
-    v = np.zeros(n)
-    v[Random.sample(Random(), range(n), weight)] = 1
-    return v
-
-def create_quadratic_label(quad, slope, intercept):
-    label = "$"
-    round = float("{:.2g}".format(quad))
-    label += "{}x^2 + ".format(round) if round != 0 else ""
-    round = float("{:.2g}".format(slope))
-    label += "{}x + ".format(round) if round != 0 else ""
-    round = float("{:.2g}".format(intercept))
-    label += "{}$".format(round) if round != 0 else " $"
-    return label
-
-def to_sys_form(G):
-    """
-    Rewrites the given n x k generator matrix to systematic form.
-    TODO this doens't work sometimes when rref gives something where there isn't
-    a perfect identiy matrix.
-    """
-    G = G.T # Transpose so that we reduce cols, not rows.
-    G_rref, pivots = Matrix(G).rref()
-    G_rref = np.array(G_rref.tolist()).astype(int) % 2
-    return G_rref.T # Transpose to go back to G in sys. form.
-
-def get_dual(G):
-    """
-    Given the n x k generator matrix of a linear code, returns the genetaor
-    matrix for its dual code. That is, fist rewrites G in systematic form. Then
-    use that to create the (n-k) x n parity check matrix. Then transpose that
-    to get the generator of the dual code.
-    """
-    n, k = G.shape
-    G = to_sys_form(G)
-    H = np.zeros((n-k, n))
-    H[:k, :k] = G[n-k:, :]
-    H[:, k:] = np.eye(n-k)
-    return H.T # Transpose parity check matrix to get generator for dual code.
+# Extract input params.
+mode = argv[1]
+k_min = int(argv[2])
+k_max = int(argv[3])
+r = int(argv[4])
+n_samples = int(argv[5]) if len(argv) > 5 else 100
+bins = int(argv[6]) if len(argv) > 6 else 20
+seed = int(argv[7]) if len(argv) > 7 else Random.randint(Random(), 0, 2**15)
+plot_weights(mode, k_min, k_max, r, n_samples, bins, seed)
